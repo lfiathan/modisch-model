@@ -1,11 +1,11 @@
-path: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset
-train: ImageSets/Main/trainval.txt
-val: ImageSets/Main/test.txt
+path: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection
+train: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection/train_full.txt
+val: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection/val_full.txt
 names:
   0: jacket
   1: shirt
-  2: dress
-  3: skirt
-  4: pants
-  5: shorts
-  6: shoes
+  2: pants
+  3: shorts
+  4: skirt
+  5: dress
+  6: shoe
