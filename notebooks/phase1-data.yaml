@@ -1,0 +1,7 @@
+path: ./dataset
+train: ImageSets/Main/trainval.txt
+val: ImageSets/Main/test.txt
+names:
+  0: TOP
+  1: BOTTOM
+  2: SHOES
