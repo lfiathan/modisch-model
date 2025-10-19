@@ -1,0 +1,21 @@
+path: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset
+train: ImageSets/Main/trainval.txt
+val: ImageSets/Main/test.txt
+names:
+  0: casual
+  1: cropped_top
+  2: dress
+  3: formal
+  4: sweater
+  5: jacket
+  6: hoodie
+  7: pants
+  8: shorts
+  9: skirt
+  10: jeans
+  11: leggings
+  12: boots
+  13: heels
+  14: sneakers
+  15: sandals
+  16: formal_shoes

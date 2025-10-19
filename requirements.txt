@@ -1,6 +1,6 @@
 ultralytics==8.3.217
 numpy>=1.18.5
 opencv-python>=4.1.1
-kaggle>=1.5.10
+kaggle
 pandas>=1.1.5
 matplotlib>=3.2.2
