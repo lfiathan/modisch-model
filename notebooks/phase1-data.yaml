@@ -1,6 +1,6 @@
-path: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection
-train: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection/train_full.txt
-val: /Users/macm4/repositories/Machine Learning Model/modisch-model/notebooks/dataset/colorful_fashion_dataset_for_object_detection/val_full.txt
+path: /Users/macm4/repositories/Machine Learning Model/modisch-model/dataset/colorful_fashion_dataset_for_object_detection
+train: /Users/macm4/repositories/Machine Learning Model/modisch-model/dataset/colorful_fashion_dataset_for_object_detection/train_full.txt
+val: /Users/macm4/repositories/Machine Learning Model/modisch-model/dataset/colorful_fashion_dataset_for_object_detection/val_full.txt
 names:
   0: TOP
   1: BOTTOM
