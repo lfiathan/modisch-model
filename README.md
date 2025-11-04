@@ -1,7 +1,3 @@
-Here is a comprehensive README for your project, based on the files you provided.
-
------
-
 # Two-Phase Hierarchical Fashion Object Detection with YOLOv8
 
 This project implements a two-phase, coarse-to-fine object detection model using YOLOv8 to identify fashion items. The system first identifies coarse categories (e.g., "TOP", "BOTTOM", "SHOES") and then uses a second model, seeded with the first, to detect fine-grained items (e.g., "shirt", "jacket", "pants").
