@@ -1,74 +1,210 @@
-# Data Project Template
+Here is a comprehensive README for your project, based on the files you provided.
 
-<a target="_blank" href="https://datalumina.com/">
-    <img src="https://img.shields.io/badge/Datalumina-Project%20Template-2856f7" alt="Datalumina Project" />
-</a>
+-----
 
-## Cookiecutter Data Science
-This project template is a simplified version of the [Cookiecutter Data Science](https://cookiecutter-data-science.drivendata.org) template, created to suit the needs of Datalumina and made available as a GitHub template.
+# Two-Phase Hierarchical Fashion Object Detection with YOLOv8
 
-## Adjusting .gitignore
+This project implements a two-phase, coarse-to-fine object detection model using YOLOv8 to identify fashion items. The system first identifies coarse categories (e.g., "TOP", "BOTTOM", "SHOES") and then uses a second model, seeded with the first, to detect fine-grained items (e.g., "shirt", "jacket", "pants").
 
-Ensure you adjust the `.gitignore` file according to your project needs. For example, since this is a template, the `/data/` folder is commented out and data will not be exlucded from source control:
+The final prediction script intelligently combines these two models to produce hierarchical labels, such as `TOP: shirt`, providing more context than a single detection model.
 
-```plaintext
-# exclude data from source control by default
-# /data/
-```
+## Concept and Inspiration
 
-Typically, you want to exclude this folder if it contains either sensitive data that you do not want to add to version control or large files.
+The core idea is based on a coarse-to-fine hierarchical detection approach. A model trained on general categories (Phase 1) can provide strong spatial priors for a second model (Phase 2) trained on more specific, fine-grained classes.
 
-## Duplicating the .env File
-To set up your environment variables, you need to duplicate the `.env.example` file and rename it to `.env`. You can do this manually or using the following terminal command:
+This project is inspired by the paper:
+
+  * Lee, C.-H.; Lin, C.-W. **A Two-Phase Fashion Apparel Detection Method Based on YOLOv4**. *Appl. Sci.* 2021, 11, 3782. [https://doi.org/10.3390/app11093782](https://doi.org/10.3390/app11093782)
+
+## Dataset Credit
+
+This project uses the **Colorful Fashion Dataset for Object Detection**.
+
+  * **Source:** [Kaggle](https://www.kaggle.com/datasets/nguyngiabol/colorful-fashion-dataset-for-object-detection)
+  * **Kaggle Notebook Inspiration:** [Fashion Object Detection - YOLOv8](https://www.kaggle.com/code/rohitgadhwar/fashion-object-detection-yolov8)
+
+-----
+
+## How It Works: A Tutorial on How It Was Made
+
+This project was built in three main stages: Data Preparation, Phased Training, and Hierarchical Prediction.
+
+### 1\. Data Preparation
+
+The most critical step was transforming the original dataset into two separate sets of labels for our two phases. This logic is primarily contained in the `notebooks/Modisch Fashion Object Detection - YOLOv8.ipynb` notebook.
+
+1.  **Class Mapping:** We defined two new class structures:
+      * **Phase 1 (Coarse):** 3 classes: `TOP`, `BOTTOM`, `SHOES`.
+      * **Phase 2 (Fine):** 8 classes: `jacket`, `shirt`, `pants`, `shorts`, `skirt`, `dress`, `shoe`, `slipper`.
+2.  **Label Transformation:** We iterated through every original annotation file. Each file was processed twice:
+      * For **Phase 1**, original classes like `jacket`, `shirt`, and `dress` were all mapped to the new class ID for `TOP`. This was repeated for `BOTTOM` and `SHOES`.
+      * For **Phase 2**, we mapped the original classes to our new fine-grained classes, omitting categories we didn't want (like `sunglass`, `hat`, `bag`).
+3.  **Directory Creation:** This process generated two new label directories, `dataset/labels_phase1` and `dataset/labels_phase2`, containing the re-mapped annotation files.
+4.  **YAML Configuration:** We created `phase1-data.yaml` and `phase2-data.yaml` to point YOLO to the correct image paths and class names for each training phase.
+
+### 2\. The Phased Training Framework
+
+To make training manageable, we created a reusable training framework.
+
+  * `src/modeling/trainer.py`: This is a generic wrapper that runs a YOLOv8 training session.
+  * `src/modeling/common.py`: This contains a key utility: the `switch_labels` context manager.
+  * **The "Label Switching" Trick:** Both `.yaml` files point to a generic `dataset/labels` directory for annotations. Before starting a training phase, the `switch_labels` function *temporarily moves* the correct label directory (e.g., `labels_phase1`) to `dataset/labels`. When training is finished (or crashes), it automatically moves the labels back to their original location. This allows us to use one consistent `.yaml` file structure for multiple, distinct sets of labels.
+
+#### Phase 1: Coarse Model (`train_phase1.py`)
+
+  * **Goal:** Train a model to find the general location of `TOP`, `BOTTOM`, and `SHOES`.
+  * **Script:** `src/modeling/train_phase1.py`
+  * **Process:** It calls the generic trainer, starting from a base `yolov8n.pt` model. It uses the `switch_labels` function to activate the `labels_phase1` directory.
+  * **Result:** A model saved at `runs/detect/yolov8_phase1_coarse/weights/best.pt`, optimized for finding coarse fashion categories.
+
+#### Phase 2: Fine-Grained Model (`train_phase2.py`)
+
+  * **Goal:** Train a model to find specific items like `shirt`, `pants`, etc.
+  * **Script:** `src/modeling/train_phase2.py`
+  * **Process:** This script calls the same generic trainer but with a crucial difference: it sets the `model_weights` parameter to the `best.pt` file generated by **Phase 1**.
+  * **Result:** This model (`runs/detect/yolov8_phase2_fine/weights/best.pt`) starts with the spatial knowledge of the coarse model, allowing it to better focus on fine-grained details.
+
+### 3\. Hierarchical Prediction (`predict.py`)
+
+The final script, `src/modeling/predict.py`, combines both models to produce intelligent labels.
+
+1.  **Load Both Models:** It loads both `model_coarse` and `model_fine`.
+2.  **Run Predictions:** It runs *both* models on the input image.
+3.  **Calculate IoU:** It iterates through every "fine" detection (e.g., a `shirt`). For each one, it calculates the Intersection over Union (IoU) with every "coarse" detection (e.g., a `TOP`).
+4.  **Create Hierarchical Label:** It finds the coarse box with the `best_match` (highest IoU).
+      * If the `max_iou` is greater than the `IOU_THRESHOLD` (set to 0.7 in `config.py`), it combines the labels: `f"{coarse_name}: {fine_name}"` (e.g., **"TOP: shirt"**).
+      * If the match isn't strong enough, it defaults to the fine label (e.g., **"shirt"**).
+5.  **Draw Boxes:** The final image is drawn using the bounding boxes from the *fine-grained* model but with the new, smarter hierarchical labels.
+
+-----
+
+## Tutorial: How to Fork and Run This Project
+
+Follow these steps to set up, train, and run the models yourself.
+
+### Step 1: Setup the Environment
+
+1.  **Clone the Repository:**
+
+    ```bash
+    git clone https://github.com/lfiathan/2phase-object-detection.git
+    cd 2phase-object-detection
+    ```
+
+2.  **Create a Python Virtual Environment:**
+
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # macOS/Linux
+    .venv\Scripts\activate     # Windows
+    ```
+
+3.  **Install Dependencies:**
+    This project uses specific libraries, including `ultralytics`, `opencv`, and `kaggle`.
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### Step 2: Download the Dataset
+
+This project uses the Kaggle API to download the data.
+
+1.  **Get Kaggle API Key:**
+
+      * Go to your Kaggle account settings (`https://www.kaggle.com/<username>/account`).
+      * Click `Create New API Token` to download `kaggle.json`.
+
+2.  **Place API Key:**
+
+      * **macOS/Linux:** `mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json`
+      * **Windows:** `mkdir %USERPROFILE%\.kaggle & move kaggle.json %USERPROFILE%\.kaggle\`
+
+3.  **Run the Download Script:**
+    The provided script will download and unzip the dataset into the correct location (`dataset/`).
+
+    ```bash
+    python src/dataset.py
+    ```
+
+### Step 3: Prepare Data for Training
+
+The raw dataset must be processed to create the labels for Phase 1 and Phase 2. The easiest way to do this is with the provided notebook.
+
+1.  **Open the Notebook:**
+    Launch Jupyter and open `notebooks/Modisch Fashion Object Detection - YOLOv8.ipynb`.
+
+2.  **Run Data Prep Cells:**
+    Execute the cells under the **"Data Preparation"** section of the notebook (cells 6 through 9). This will:
+
+      * Define the class mappings.
+      * Create `dataset/labels_phase1` and `dataset/labels_phase2`.
+      * Generate `phase1-data.yaml` and `phase2-data.yaml`.
+
+### Step 4: Train the Phase 1 (Coarse) Model
+
+This script trains the model to detect `TOP`, `BOTTOM`, and `SHOES`.
 
 ```bash
-cp .env.example .env # Linux, macOS, Git Bash, WSL
-copy .env.example .env # Windows Command Prompt
+# --device 0 uses your first GPU (e.g., CUDA or MPS)
+# --device cpu forces CPU training
+python src/modeling/train_phase1.py --epochs 50 --batch 16 --device 0
 ```
 
-This command creates a copy of `.env.example` and names it `.env`, allowing you to configure your environment variables specific to your setup.
+This will create a new run directory, and the best model will be saved at `runs/detect/yolov8_phase1_coarse/weights/best.pt`.
 
+### Step 5: Train the Phase 2 (Fine) Model
 
-## Project Organization
+This script automatically finds the `best.pt` from Phase 1 and uses it as a seed to train the fine-grained model.
+
+```bash
+python src/modeling/train_phase2.py --epochs 50 --batch 16 --device 0
+```
+
+The best model will be saved at `runs/detect/yolov8_phase2_fine/weights/best.pt`.
+
+### Step 6: Run Hierarchical Prediction
+
+You can test the full pipeline using the `predict.py` script.
+
+1.  **Open the Script:** Open `src/modeling/predict.py`.
+2.  **Set Image Path:** In the `if __name__ == "__main__":` block at the bottom, change the `img_path` variable to point to any image you want to test (e.g., `notebooks/test/image_chae.png`).
+3.  **Run the Script:**
+    ```bash
+    python src/modeling/predict.py
+    ```
+
+This will run the hierarchical prediction and save the annotated image as `hierarchical_prediction_output.jpg` in your root directory.
+
+-----
+
+## Project Structure (Key Files)
 
 ```
-├── LICENSE            <- Open-source license if one is chosen
-├── README.md          <- The top-level README for developers using this project
-├── data
-│   ├── external       <- Data from third party sources
-│   ├── interim        <- Intermediate data that has been transformed
-│   ├── processed      <- The final, canonical data sets for modeling
-│   └── raw            <- The original, immutable data dump
+├── README.md           <- This file
+├── data/results.csv    <- CSV log of Phase 1 training metrics
+├── requirements.txt    <- Python dependencies
+├── notebooks/
+│   ├── Modisch Fashion Object Detection - YOLOv8.ipynb  <- Main notebook for data prep & training
+│   ├── phase1-data.yaml    <- Data config for the coarse model
+│   └── phase2-data.yaml    <- Data config for the fine model
 │
-├── models             <- Trained and serialized models, model predictions, or model summaries
+├── runs/                 <- Output directory for models (ignored by .gitignore)
+│   └── detect/
+│       ├── yolov8_phase1_coarse/  <- Results from Phase 1 training
+│       └── yolov8_phase2_fine/    <- Results from Phase 2 training
 │
-├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-│                         the creator's initials, and a short `-` delimited description, e.g.
-│                         `1.0-jqp-initial-data-exploration`
-│
-├── references         <- Data dictionaries, manuals, and all other explanatory materials
-│
-├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures        <- Generated graphics and figures to be used in reporting
-│
-└── src                         <- Source code for this project
-    │
-    ├── __init__.py             <- Makes src a Python module
-    │
-    ├── config.py               <- Store useful variables and configuration
-    │
-    ├── dataset.py              <- Scripts to download or generate data
-    │
-    ├── features.py             <- Code to create features for modeling
-    │
-    │    
-    ├── modeling                
-    │   ├── __init__.py 
-    │   ├── predict.py          <- Code to run model inference with trained models          
-    │   └── train.py            <- Code to train models
-    │
-    ├── plots.py                <- Code to create visualizations 
-    │
-    └── services                <- Service classes to connect with external platforms, tools, or APIs
-        └── __init__.py 
+└── src/
+    ├── config.py           <- Central configuration for all paths, model names, and hyperparameters
+    ├── dataset.py          <- Script to download the Kaggle dataset
+    └── modeling/
+        ├── common.py       <- Utilities like `auto_device` and the `switch_labels` context manager
+        ├── predict.py      <- Implements the hierarchical prediction logic
+        ├── train_phase1.py <- Entrypoint to train the coarse model
+        ├── train_phase2.py <- Entrypoint to train the fine-grained model
+        └── trainer.py      <- A generic, reusable YOLOv8 training wrapper
 ```
+
+## License
+
+This project is licensed under the MIT License. See the `LICENCE` file for details.
