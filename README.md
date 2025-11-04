@@ -17,7 +17,6 @@ This project is inspired by the paper:
 This project uses the **Colorful Fashion Dataset for Object Detection**.
 
   * **Source:** [Kaggle](https://www.kaggle.com/datasets/nguyngiabol/colorful-fashion-dataset-for-object-detection)
-  * **Kaggle Notebook Inspiration:** [Fashion Object Detection - YOLOv8](https://www.kaggle.com/code/rohitgadhwar/fashion-object-detection-yolov8)
 
 -----
 
